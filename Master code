@@ -1,0 +1,111 @@
+#include <IRremote.hpp>
+
+#include <Wire.h>
+#include <MFRC522.h>
+#include <LiquidCrystal.h>
+
+#define RST_PIN   6
+#define SS_PIN    10
+const int rs = 9, en = 7, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
+MFRC522 mfrc522(SS_PIN, RST_PIN);
+
+byte simonUID[4] = {0xDA, 0x45, 0xEA, 0x36}; 
+byte samirUID[4] = {0xCA, 0x10, 0xE4, 0x36}; 
+byte jaydenUID[4] = {0x6A, 0x41, 0xE0, 0x36}; 
+byte emelieUID[4] = {0x3A, 0xD9, 0xD4, 0x36}; 
+byte gabrielUID[4] = {0x1A, 0xC4, 0x30, 0x15}; 
+byte joeyUID[4] = {0xCA, 0xB2, 0xCF, 0x36}; 
+byte liamUID[4] = {0x8A, 0x14, 0x62, 0x16};
+
+bool compareUID(byte *cardUID, byte *storedUID) {
+    for (byte i = 0; i < 4; i++) {
+        if (cardUID[i] != storedUID[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void grantAccess() {
+    Serial.println("Access Granted");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Access Granted");
+    // Send command to slave to enable object following
+    Wire.beginTransmission(8); // transmit to device #8
+    Wire.write('G'); // send grant access command
+    Wire.endTransmission(); // stop transmitting
+}
+
+void setup() {
+    Wire.begin();
+    Serial.begin(9600);
+    while (!Serial);
+    SPI.begin();
+    mfrc522.PCD_Init();
+    delay(4);
+    mfrc522.PCD_DumpVersionToSerial();
+    Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
+    lcd.begin(16, 2); 
+}
+
+void loop() {
+    if (!mfrc522.PICC_IsNewCardPresent()) {
+        return;
+    }
+
+    if (!mfrc522.PICC_ReadCardSerial()) {
+        return;
+    }
+
+    String cardID = "";
+    for (byte i = 0; i < mfrc522.uid.size; i++) {
+        cardID += String(mfrc522.uid.uidByte[i] < 0x10 ? "0" : "");
+        cardID += String(mfrc522.uid.uidByte[i], HEX);
+    }
+    cardID.toUpperCase();
+
+    if (compareUID(mfrc522.uid.uidByte, simonUID)){
+    Serial.println("Simoneeee");
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Simoneeee");
+    grantAccess();
+    }
+
+    if (compareUID(mfrc522.uid.uidByte, samirUID)) {
+    Serial.println("Wanna Cookie?");
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Wanna Cookie?");
+    grantAccess();
+    }
+
+    if (compareUID(mfrc522.uid.uidByte, joeyUID)) {
+    Serial.println("Yessir Joey");
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Yessir Joey");
+    grantAccess();
+    }
+
+    if (compareUID(mfrc522.uid.uidByte, liamUID)) {
+    Serial.println("Follow");
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Follow");
+    grantAccess();
+    }
+
+
+    if (compareUID(mfrc522.uid.uidByte, jaydenUID)){
+   Serial.println("Ew not Jayden");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Ew not Jayden");
+    }
+
+    delay(1000);
+}
