@@ -1,0 +1,254 @@
+#include <Wire.h>  // Include the Wire library for I2C communication
+
+#include <Servo.h>  // Include the Servo library for controlling servos
+
+#include <IRremote.hpp>  // Include the irRemote library for handling IR signals
+
+#define servoPin 10  // Define the pin for the servo motor
+
+#define irPin 9  // Define the pin for the IR sensor
+
+Servo myservo;  // Create a servo object
+
+int echoPin = 12;  // Define the pin for the echo pin of the ultrasonic sensor
+int trigPin = 13;  // Define the pin for the trigger pin of the ultrasonic sensor
+
+float duration, Distance;  // Define variables for duration and distance measurements
+
+#define PWMA 5  // Define motor control pins
+#define AIN1 8
+#define PWMB 6
+#define BIN1 7
+#define STBY 3
+
+#define Forward 0xB946FF00  // Define IR remote control codes
+#define Backward 0xEA15FF00
+#define Left 0xBB44FF00
+#define Right 0xBC43FF00
+#define Stop 0xBF40FF00
+#define disconnectIRRemote 0xE916FF00
+#define connectIRRemote 0xF20DFF00
+
+unsigned long val;  // Define variable for storing IR remote code
+
+int OFF = 0;  // Define constants for motor speed
+int ON = 100;
+
+unsigned long previousMillis;  // Define variable for storing previous time
+
+bool accessGranted = false;
+
+bool remoteEnabled = true;  // Define variables for controlling IR remote and object following
+
+void receiveEvent(int howMany) {  // Function to handle I2C data reception
+    while (Wire.available()) {  // Loop through available data
+        char command = Wire.read();  // Read received data
+        if (command == 'G') {  // Check if access granted command received
+            accessGranted = true;  // Set access granted flag
+        }
+    }
+}
+
+void goForwards() {  // Function to move goForwards
+    digitalWrite(AIN1, HIGH);  // Set direction of turnLeft motor
+    analogWrite(PWMA, ON);  // Set speed of turnLeft motor
+    digitalWrite(BIN1, HIGH);  // Set direction of turnRight motor
+    analogWrite(PWMB, ON);  // Set speed of turnRight motor
+    digitalWrite(STBY, HIGH);  // Activate motors
+} 
+
+void stopMoving() {  // Function to stopMoving
+    digitalWrite(AIN1, HIGH);  // Set direction of turnLeft motor
+    analogWrite(PWMA, OFF);  // Turn off turnLeft motor
+    digitalWrite(BIN1, HIGH);  // Set direction of turnRight motor
+    analogWrite(PWMB, OFF);  // Turn off turnRight motor
+    digitalWrite(STBY, HIGH);  // Deactivate motors
+}
+
+void goBackwards() {  // Function to move goBackwards
+    digitalWrite(AIN1, LOW);  // Set direction of turnLeft motor
+    analogWrite(PWMA, ON);  // Set speed of turnLeft motor
+    digitalWrite(BIN1, LOW);  // Set direction of turnRight motor
+    analogWrite(PWMB, ON);  // Set speed of turnRight motor
+    digitalWrite(STBY, HIGH);  // Activate motors
+}
+
+void turnLeft() {  // Function to turn turnLeft
+    digitalWrite(AIN1, LOW);  // Set direction of turnLeft motor
+    analogWrite(PWMA, ON);  // Set speed of turnLeft motor
+    digitalWrite(BIN1, HIGH);  // Set direction of turnRight motor
+    analogWrite(PWMB, ON);  // Set speed of turnRight motor
+    digitalWrite(STBY, HIGH);  // Activate motors
+}
+
+void turnRight() {  // Function to turn turnRight
+    digitalWrite(AIN1, HIGH);  // Set direction of turnLeft motor
+    analogWrite(PWMA, ON);  // Set speed of turnLeft motor
+    digitalWrite(BIN1, LOW);  // Set direction of turnRight motor
+    analogWrite(PWMB, ON);  // Set speed of turnRight motor
+    digitalWrite(STBY, HIGH);  // Activate motors
+}
+
+void dontFollow() {  // Function to stopMoving following
+    digitalWrite(AIN1, HIGH);  // Set direction of turnLeft motor
+    analogWrite(PWMA, OFF);  // Turn off turnLeft motor
+    digitalWrite(BIN1, HIGH);  // Set direction of turnRight motor
+    analogWrite(PWMB, OFF);  // Turn off turnRight motor
+    digitalWrite(STBY, HIGH);  // Deactivate motors
+    myservo.write(90);  // Set servo to look goForwards
+}
+
+void remoteOFF() {  // Function to disable IR remote mode
+    remoteEnabled = false;  // Disable remote control
+    accessGranted = false;  // Reset access flag
+    Serial.println("IR remote mode disabled.");  // Print message
+}
+
+void remoteON() {  // Function to enable IR remote mode
+    remoteEnabled = true;  // Enable remote control
+    Serial.println("IR remote mode enabled.");  // Print message
+}
+
+float checkDistance() {  // Function to measure distance using ultrasonic sensor
+    digitalWrite(trigPin, LOW);  // Set trigger pin to low
+    delayMicroseconds(2);  // Wait for stability
+    digitalWrite(trigPin, HIGH);  // Send trigger pulse
+    delayMicroseconds(10);  // Wait for pulse to be sent
+    digitalWrite(trigPin, LOW);  // Reset trigger pin
+    duration = pulseIn(echoPin, HIGH);  // Measure duration of echo pulse
+    Distance = duration / 58.0;  // Calculate distance
+    return Distance;  // Return distance
+}
+
+void setup() {
+    Wire.begin(8);  // Initialize I2C communication with address 8
+    Wire.onReceive(receiveEvent);  // Set up event handler for I2C data reception
+    Serial.begin(9600);  // Initialize serial communication
+    myservo.attach(servoPin);  // Attach servo to pin
+    pinMode(PWMA, OUTPUT);  // Set motor control pins as output
+    pinMode(AIN1, OUTPUT);
+    pinMode(PWMB, OUTPUT);
+    pinMode(BIN1, OUTPUT);
+    pinMode(STBY, OUTPUT);
+    pinMode(trigPin, OUTPUT);  // Set ultrasonic sensor pins as output and input
+    pinMode(echoPin, INPUT);
+    IrReceiver.begin(irPin, ENABLE_LED_FEEDBACK);  // Initialize IR remote receiver
+}
+
+void followCar() {  // Function to follow objects
+    myservo.write(90);  // Set servo to look goForwards
+    delay(500);  // Delay for servo stabilization
+    checkDistance();  // Measure distance in front
+    Serial.println(Distance);  // Print distance
+    
+    if (Distance > 40) {  // If distance is greater than 40 cm
+        goForwards();  // Move goForwards
+    } else if (Distance > 17 && Distance < 23) {  // If distance is between 17 and 23 cm
+        stopMoving();  // stopMoving
+        delay(500);  // Delay for stabilization
+        myservo.write(0);  // Set servo to look turnRight
+        delay(500);  // Delay for servo stabilization
+        checkDistance();  // Measure distance on the turnRight
+        Serial.println(Distance);  // Print distance
+        delay(500);  // Delay before scanning turnLeft
+        myservo.write(180);  // Set servo to look turnLeft
+        delay(500);  // Delay for servo stabilization
+        checkDistance();  // Measure distance on the turnLeft
+        Serial.println(Distance);  // Print distance
+    } else if (Distance < 17) {  // If distance is less than 17 cm
+        goBackwards();  // Move goBackwards
+    } else {  // If distance is between 23 and 40 cm
+        myservo.write(0);  // Set servo to look turnRight
+        delay(500);  // Delay for servo stabilization
+        checkDistance();  // Measure distance on the turnRight
+        Serial.println(Distance);  // Print distance
+        
+        if (Distance < 40) {  // If distance on the turnRight is less than 40 cm
+            turnRight();  // Turn turnRight
+            delay(200);  // Delay for turning
+            goForwards();  // Move goForwards after turning
+        } else {  // If distance on the turnRight is not less than 40 cm
+            myservo.write(180);  // Set servo to look turnLeft
+            delay(500);  // Delay for servo stabilization
+            checkDistance();  // Measure distance on the turnLeft
+            Serial.println(Distance);  // Print distance
+            if (Distance < 40) {  // If distance on the turnLeft is less than 40 cm
+                turnLeft();  // Turn turnLeft
+                delay(200);  // Delay for turning
+                goForwards();  // Move goForwards after turning
+            } else {  // If no obstacle is detected on either side
+                myservo.write(0);  // Set servo to look turnRight
+                delay(500);  // Delay for servo stabilization
+                checkDistance();  // Measure distance on the turnRight
+                Serial.println(Distance);  // Print distance
+                delay(500);  // Delay before scanning turnLeft
+                myservo.write(180);  // Set servo to look turnLeft
+                delay(500);  // Delay for servo stabilization
+                checkDistance();  // Measure distance on the turnLeft
+                Serial.println(Distance);  // Print distance
+                
+                // If no obstacle detected in front after scanning, resume moving goForwards
+                if (Distance > 23) {
+                    goForwards();  // Move goForwards
+                }
+            }
+        }
+    }
+
+    if (Distance > 23) {  // If distance in front is greater than 23 cm
+        goForwards();  // Move goForwards
+    }
+}
+
+void irRemote() {  // Function to handle IR remote signals
+    if (IrReceiver.decode()) {  // If IR signal received
+        previousMillis = millis();  // Update previous time
+        val = IrReceiver.decodedIRData.decodedRawData;  // Get decoded IR data
+        Serial.println(val, HEX);  // Print decoded IR data in hexadecimal
+        IrReceiver.resume();  // Resume IR signal reception
+        switch(val) {  // Switch based on received IR code
+            case Forward:  // If goForwards command received
+                goForwards();  // Move goForwards
+                break;  // Exit switch
+            case Backward:  // If goBackwards command received
+                goBackwards();  // Move goBackwards
+                break;  // Exit switch
+            case Left:  // If turnLeft command received
+                turnLeft();  // Turn turnLeft
+                break;  // Exit switch
+            case Right:  // If turnRight command received
+                turnRight();  // Turn turnRight
+                break;  // Exit switch
+            case Stop:  // If stopMoving command received
+                stopMoving();  // stopMoving
+                break;  // Exit switch
+            case disconnectIRRemote:  // If disconnect remote command received
+                remoteOFF();  // Disable IR remote mode
+                break;  // Exit switch
+            case connectIRRemote:  // If connect remote command received
+                remoteON();  // Enable IR remote mode
+                break;  // Exit switch
+        }
+    } else {  // If no IR signal received
+        if (millis() - previousMillis > 200) {  // If more than 200 ms elapsed since last signal
+            stopMoving();  // stopMoving
+            previousMillis = millis();  // Update previous time
+        }
+    }
+}
+
+void loop() {  // Main loop
+    irRemote();  // Handle IR remote signals
+    
+    if (remoteEnabled && accessGranted) {  // If remote control enabled and access granted
+        followCar();  // Follow objects
+    }
+    
+    if (!remoteEnabled) {  // If remote control disabled
+        dontFollow();  // stopMoving following objects
+    }
+    
+    if (remoteEnabled && !accessGranted) {  // If remote control enabled but access not granted
+        irRemote();  // Handle IR remote signals
+    }
+}
